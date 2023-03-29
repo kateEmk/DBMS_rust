@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::state::FieldType;
 
 pub struct BinaryStorage {
-    pub db_name: String,
+    pub table_name: String,
     pub fields: HashMap<String, Field>,
 }
 

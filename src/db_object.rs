@@ -40,7 +40,7 @@ impl DbObject {
         csv_writer.flush();
 
         self.create_table_info(&table_name.to_string(), fields);
-
+        // TODO: rebuild fk building mechanism
         // if !fks.is_empty() { self.add_fks(info_table_path, fks); };
 
         Ok(TableObject {
@@ -55,13 +55,11 @@ impl DbObject {
         CSV file: {}", e))?;
 
         let mut fields_info = vec![];
-        // FIXME: save table info in a better structure
         for (field_name, field_obj) in &fields {
             fields_info.push(FieldInfo { field: field_obj.clone(), field_name: field_name.to_string() })
         }
         let encoded: Vec<u8> = bincode::serialize(&fields_info).unwrap();
 
-        // Write the encoded data to a file
         let mut file = File::create(info_table_path.as_str()).unwrap();
         file.write_all(&encoded);
         Ok(())
@@ -119,7 +117,7 @@ impl DbObject {
 
         Ok(())
     }
-
+    // TODO: deprecated code
     pub fn get_info_from_file(&self, file_path: &str) -> HashMap<String, Option<Field>> {
         let file = File::open(file_path.trim()).unwrap();
         let reader = BufReader::new(file);

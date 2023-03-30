@@ -1,9 +1,13 @@
-#[derive(Copy, Clone, Debug, PartialEq)]
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldType {
     Int,
     Float,
     Double,
-    Varchar(usize), // Varchar with a maximum length
+    Varchar(usize),
+    // Varchar with a maximum length
     Text,
     Blob,
 }

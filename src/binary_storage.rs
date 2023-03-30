@@ -1,15 +1,24 @@
 use std::collections::HashMap;
+
+use serde_derive::{Deserialize, Serialize};
+
 use crate::field_type::FieldType;
-use serde_derive::{Serialize, Deserialize};
 
 pub struct BinaryStorage {
     pub table_name: String,
     pub fields: HashMap<String, Field>,
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Field {
     pub field_type: FieldType,
     pub is_null: bool,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldInfo {
+    pub field: Field,
+    pub field_name: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,7 +42,7 @@ impl BinaryStorage {
     pub fn get_fields(&self) {
         for (name, field) in &self.fields {
             println!("Field name - {}, field type - {:?}, field null - {}", name, field.field_type,
-                     field.is_null )
+                     field.is_null)
         }
     }
 }

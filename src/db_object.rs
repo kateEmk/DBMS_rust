@@ -1,11 +1,16 @@
+extern crate bincode;
+
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::format;
-use crate::binary_storage::{Field, ForeignKey};
 use std::fs::File;
-use std::io::{self, Write, BufRead, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::ops::Deref;
-use serde::{Serialize};
+use std::string::String;
+
+use serde::Serialize;
+
+use crate::binary_storage::{Field, FieldInfo, ForeignKey};
 use crate::field_type::FieldType;
 
 
@@ -23,55 +28,55 @@ pub struct TableObject {
 
 impl DbObject {
     pub fn create_table(&self, table_name: String, fields: HashMap<String, Field>, fks: Vec<ForeignKey>)
-        -> std::result::Result<TableObject, String>  {
-
+                        -> std::result::Result<TableObject, String> {
         let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name).trim()
             .to_string();
-        let mut table = File::create(&table_path).map_err(|e| format!("Failed to create CSV file: \
+        let mut table_file = File::create(&table_path).map_err(|e| format!("Failed to create CSV file: \
         {}", e))?;
 
-        let info_table_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
-            .to_string();
-        let mut info_file = File::create(&info_table_path).map_err(|e| format!("Failed to create \
-        CSV file: {}", e))?;
+        let mut csv_writer = csv::Writer::from_writer(table_file);
+        csv_writer.write_record(
+            fields.keys().clone().collect::<Vec<_>>()
+        ).map_err(|e| format!("Failed to create table: {}", e));
+        csv_writer.flush();
 
-        let mut fields_name: Vec<String> = Vec::new();
+        self.create_table_info(&table_name.to_string(), fields);
 
-        for (field_name, field_obj) in fields {
-            fields_name.push(field_name.clone());
-            writeln!(
-                info_file,
-                "{:?}, {:?}, {}",
-                field_name, field_obj.field_type, field_obj.is_null
-            ).map_err(|e| format!("Failed to create CSV file: {}", e))?;
-        }
-
-        if !fks.is_empty() { self.add_fks(info_table_path, fks); };
-
-        writeln!(
-            table,
-            "{:?}",
-            fields_name
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<&str>>()
-        ).map_err(|e| format!("Failed to create CSV file: {}", e))?;
+        // if !fks.is_empty() { self.add_fks(info_table_path, fks); };
 
         Ok(TableObject {
             db_name: self.name.clone(),
             table_name,
         })
     }
+    pub fn create_table_info(&self, table_name: &str, fields: HashMap<String, Field>) -> std::result::Result<(), String> {
+        let info_table_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
+            .to_string();
+        let mut info_file = File::create(&info_table_path).map_err(|e| format!("Failed to create \
+        CSV file: {}", e))?;
+
+        let mut fields_info = vec![];
+        // FIXME: save table info in a better structure
+        for (field_name, field_obj) in &fields {
+            fields_info.push(FieldInfo { field: field_obj.clone(), field_name: field_name.to_string() })
+        }
+        let encoded: Vec<u8> = bincode::serialize(&fields_info).unwrap();
+
+        // Write the encoded data to a file
+        let mut file = File::create(info_table_path.as_str()).unwrap();
+        file.write_all(&encoded);
+        Ok(())
+    }
 
     pub fn add_fks(&self, mut info_file: String, fks: Vec<ForeignKey>) -> std::result::Result<(),
-        String>{
+        String> {
         let info_from_file: HashMap<String, Option<Field>> = self.get_info_from_file(info_file.as_str
         ());
         let mut writer: BufWriter<File> = BufWriter::new(File::open(info_file.trim()).unwrap());
 
         for fk in &fks {
             let info_to_file: HashMap<String, Option<Field>> = self.get_info_from_file(format!(".{}",
-                                                                                          fk.to_table_name).as_str());
+                                                                                               fk.to_table_name).as_str());
 
             // find the types of the fields in the foreign key
             let mut from_field_type: Option<FieldType> = None;

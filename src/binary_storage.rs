@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use crate::state::FieldType;
+use crate::field_type::FieldType;
+use serde_derive::{Serialize, Deserialize};
 
 pub struct BinaryStorage {
     pub table_name: String,
@@ -10,6 +11,13 @@ pub struct Field {
     pub field_type: FieldType,
     pub is_null: bool,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct ForeignKey {
+    pub to_table_name: String,
+    pub to_field_name: String,
+}
+
 
 impl Field {
     pub fn is_null(&self) -> bool {

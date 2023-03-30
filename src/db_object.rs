@@ -13,7 +13,6 @@ use serde::Serialize;
 use crate::binary_storage::{Field, FieldInfo, ForeignKey};
 use crate::field_type::FieldType;
 
-
 #[derive(Clone, Debug)]
 pub struct DbObject {
     pub name: String,
@@ -66,6 +65,20 @@ impl DbObject {
         let mut file = File::create(info_table_path.as_str()).unwrap();
         file.write_all(&encoded);
         Ok(())
+    }
+    pub fn read_table_info(&self, table_name: &str) -> Result<Vec<FieldInfo>, String> {
+        let mut table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
+            .to_string();
+        let mut info_file = File::open(table_info_path).map_err(|e| format!("File not found: {}", e))?;
+        let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> = bincode::deserialize_from(&mut info_file);
+        match fields_info_result {
+            Ok(fields_info) => {
+                return Ok(fields_info)
+            }
+            Err(e) => {
+                return Err(e.to_string())
+            }
+        }
     }
 
     pub fn add_fks(&self, mut info_file: String, fks: Vec<ForeignKey>) -> std::result::Result<(),

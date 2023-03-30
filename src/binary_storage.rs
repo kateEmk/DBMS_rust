@@ -9,13 +9,13 @@ pub struct BinaryStorage {
     pub fields: HashMap<String, Field>,
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Field {
     pub field_type: FieldType,
     pub is_null: bool,
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldInfo {
     pub field: Field,
     pub field_name: String,

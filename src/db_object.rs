@@ -30,23 +30,28 @@ impl DbObject {
                         -> std::result::Result<TableObject, String> {
         let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name).trim()
             .to_string();
-        let mut table_file = File::create(&table_path).map_err(|e| format!("Failed to create CSV file: \
-        {}", e))?;
+        let mut table_file = File::create(&table_path);
+        match table_file {
+            Ok(mut table_file) => {
+                let mut csv_writer = csv::Writer::from_writer(table_file);
+                csv_writer.write_record(
+                    fields.keys().clone().collect::<Vec<_>>()
+                ).map_err(|e| format!("Failed to create table: {}", e));
+                csv_writer.flush();
 
-        let mut csv_writer = csv::Writer::from_writer(table_file);
-        csv_writer.write_record(
-            fields.keys().clone().collect::<Vec<_>>()
-        ).map_err(|e| format!("Failed to create table: {}", e));
-        csv_writer.flush();
+                self.create_table_info(&table_name.to_string(), fields);
+                // TODO: rebuild fk building mechanism
+                // if !fks.is_empty() { self.add_fks(info_table_path, fks); };
 
-        self.create_table_info(&table_name.to_string(), fields);
-        // TODO: rebuild fk building mechanism
-        // if !fks.is_empty() { self.add_fks(info_table_path, fks); };
-
-        Ok(TableObject {
-            db_name: self.name.clone(),
-            table_name,
-        })
+                Ok(TableObject {
+                    db_name: self.name.clone(),
+                    table_name,
+                })
+            }
+            Err(e) => {
+                Err("Failed to create table".to_string())
+            }
+        }
     }
     pub fn create_table_info(&self, table_name: &str, fields: HashMap<String, Field>) -> std::result::Result<(), String> {
         let info_table_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
@@ -58,23 +63,43 @@ impl DbObject {
         for (field_name, field_obj) in &fields {
             fields_info.push(FieldInfo { field: field_obj.clone(), field_name: field_name.to_string() })
         }
-        let encoded: Vec<u8> = bincode::serialize(&fields_info).unwrap();
-
-        let mut file = File::create(info_table_path.as_str()).unwrap();
-        file.write_all(&encoded);
+        let encoded = bincode::serialize(&fields_info);
+        match encoded {
+            Ok(encoded_data) => {
+                let mut file = File::create(info_table_path.as_str());
+                match file {
+                    Ok(mut file) => {
+                        file.write_all(&encoded_data);
+                    }
+                    Err(e) => {
+                        return Err("Failed to create table info".to_string());
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(e.to_string());
+            }
+        }
         Ok(())
     }
     pub fn read_table_info(&self, table_name: &str) -> Result<Vec<FieldInfo>, String> {
         let mut table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
             .to_string();
-        let mut info_file = File::open(table_info_path).map_err(|e| format!("File not found: {}", e))?;
-        let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> = bincode::deserialize_from(&mut info_file);
-        match fields_info_result {
-            Ok(fields_info) => {
-                return Ok(fields_info)
+        let mut info_file = File::open(table_info_path);
+        match info_file {
+            Ok(mut file) => {
+                let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> = bincode::deserialize_from(&mut file);
+                match fields_info_result {
+                    Ok(fields_info) => {
+                        return Ok(fields_info);
+                    }
+                    Err(e) => {
+                        return Err(e.to_string());
+                    }
+                }
             }
             Err(e) => {
-                return Err(e.to_string())
+                Err("File not found".to_string())
             }
         }
     }

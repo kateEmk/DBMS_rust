@@ -1,17 +1,12 @@
 extern crate bincode;
 
-use std::borrow::Borrow;
+use csv::{Writer, WriterBuilder};
 use std::collections::HashMap;
-use std::fmt::format;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
-use std::ops::Deref;
+use std::io::{Write};
 use std::string::String;
 
-use serde::Serialize;
-
-use crate::binary_storage::{Field, FieldInfo, ForeignKey};
-use crate::field_type::FieldType;
+use crate::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct DbObject {
@@ -26,147 +21,137 @@ pub struct TableObject {
 }
 
 impl DbObject {
-    pub fn create_table(&self, table_name: String, fields: HashMap<String, Field>, fks: Vec<ForeignKey>)
-                        -> std::result::Result<TableObject, String> {
-        let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name).trim()
+    pub fn create_table(
+        &self,
+        table_name: String,
+        fields: HashMap<String, Field>,
+        fks: Vec<ForeignKey>,
+    ) -> std::result::Result<TableObject, AssertFailure> {
+        let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name)
+            .trim()
             .to_string();
-        let mut table_file = File::create(&table_path);
-        match table_file {
-            Ok(mut table_file) => {
-                let mut csv_writer = csv::Writer::from_writer(table_file);
-                csv_writer.write_record(
-                    fields.keys().clone().collect::<Vec<_>>()
-                ).map_err(|e| format!("Failed to create table: {}", e));
-                csv_writer.flush();
+        let mut table_file = ok_or_err!(File::create(&table_path));
 
-                self.create_table_info(&table_name.to_string(), fields);
-                // TODO: rebuild fk building mechanism
-                // if !fks.is_empty() { self.add_fks(info_table_path, fks); };
+        let mut csv_writer = WriterBuilder::new()
+            .delimiter(b',')
+            .quote_style(csv::QuoteStyle::Always)
+            .from_writer(table_file);
+        ok_or_err!(csv_writer.write_record(fields.keys().clone().collect::<Vec<_>>()));
 
-                Ok(TableObject {
-                    db_name: self.name.clone(),
-                    table_name,
-                })
-            }
-            Err(e) => {
-                Err("Failed to create table".to_string())
-            }
-        }
+        ok_or_err!(self.create_table_info(&table_name.to_string(), fields));
+
+        // FIXME: rebuild fk building mechanism
+        if !fks.is_empty() { self.add_fks(table_name.clone(), fks); };
+
+        ok!(csv_writer.flush());
+
+        Ok(TableObject {
+            db_name: self.name.clone(),
+            table_name,
+        })
     }
-    pub fn create_table_info(&self, table_name: &str, fields: HashMap<String, Field>) -> std::result::Result<(), String> {
-        let info_table_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
+
+    pub fn create_table_info(
+        &self,
+        table_name: &str,
+        fields: HashMap<String, Field>,
+    ) -> std::result::Result<(), AssertFailure> {
+        let info_table_path = format!("{}/{}/{}_info", self.path, self.name, table_name)
+            .trim()
             .to_string();
-        let mut info_file = File::create(&info_table_path).map_err(|e| format!("Failed to create \
-        CSV file: {}", e))?;
 
         let mut fields_info = vec![];
         for (field_name, field_obj) in &fields {
-            fields_info.push(FieldInfo { field: field_obj.clone(), field_name: field_name.to_string() })
+            fields_info.push(FieldInfo {
+                field: field_obj.clone(),
+                field_name: field_name.to_string(),
+            })
         }
-        let encoded = bincode::serialize(&fields_info);
-        match encoded {
-            Ok(encoded_data) => {
-                let mut file = File::create(info_table_path.as_str());
-                match file {
-                    Ok(mut file) => {
-                        file.write_all(&encoded_data);
-                    }
-                    Err(e) => {
-                        return Err("Failed to create table info".to_string());
-                    }
-                }
-            }
-            Err(e) => {
-                return Err(e.to_string());
-            }
-        }
+        let encoded = ok_or_err!(bincode::serialize(&fields_info));
+
+        let mut file = ok_or_err!(File::create(info_table_path.as_str()));
+        ok!(file.write_all(&encoded));
+
         Ok(())
     }
-    pub fn read_table_info(&self, table_name: &str) -> Result<Vec<FieldInfo>, String> {
-        let mut table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name).trim()
+
+    pub fn read_table_info(&self, table_name: &str) -> Result<Vec<FieldInfo>, AssertFailure> {
+        let mut table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name)
+            .trim()
             .to_string();
-        let mut info_file = File::open(table_info_path);
-        match info_file {
-            Ok(mut file) => {
-                let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> = bincode::deserialize_from(&mut file);
-                match fields_info_result {
-                    Ok(fields_info) => {
-                        return Ok(fields_info);
-                    }
-                    Err(e) => {
-                        return Err(e.to_string());
-                    }
-                }
+        let mut info_file = ok_or_err!(File::open(table_info_path));
+        let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> =
+            bincode::deserialize_from(&mut info_file);
+        return match fields_info_result {
+            Ok(fields_info) => {
+                Ok(fields_info)
             }
             Err(e) => {
-                Err("File not found".to_string())
+                Err(AssertFailure {
+                    path: file!().to_string(),
+                    line: line!() as usize,
+                    msg: format!("Error while deserializing table info for table {}: {}",
+                                 table_name, e.to_string()),
+                })
             }
         }
     }
 
-    pub fn add_fks(&self, mut info_file: String, fks: Vec<ForeignKey>) -> std::result::Result<(),
-        String> {
-        let info_from_file: HashMap<String, Option<Field>> = self.get_info_from_file(info_file.as_str
-        ());
-        let mut writer: BufWriter<File> = BufWriter::new(File::open(info_file.trim()).unwrap());
+    pub fn add_fks(
+        &self,
+        mut table_name: String,
+        fks: Vec<ForeignKey>,
+    ) -> std::result::Result<csv::Result<()>, AssertFailure> {
+        let info_from_file: Vec<FieldInfo> = ok_or_err!(self.read_table_info(table_name.as_str()));
+        let file = ok_or_err!(File::open(format!("{}/{}/{}_info", self.path, self.name,
+            table_name)));
+        let mut writer = WriterBuilder::new()
+            .delimiter(b',')
+            .quote_style(csv::QuoteStyle::Always)
+            .from_writer(file);
+
+        let mut record: Vec<String> = Vec::new();
 
         for fk in &fks {
-            let info_to_file: HashMap<String, Option<Field>> = self.get_info_from_file(format!(".{}",
-                                                                                               fk.to_table_name).as_str());
+            let info_to_file: Vec<FieldInfo> = ok_or_err!(self.read_table_info(fk.to_table_name
+                .as_str()));
 
             // find the types of the fields in the foreign key
             let mut from_field_type: Option<FieldType> = None;
             let mut to_field_type: Option<FieldType> = None;
-            for (name, field) in &info_from_file {
-                if name.trim() == fk.to_field_name.trim() {
-                    from_field_type = field.as_ref().map(|f| f.field_type);
+
+            for field in info_from_file.clone() {
+                if field.field_name.trim() == fk.to_field_name.trim() {
+                    from_field_type = Some(field.field.field_type);
                 }
             }
-            for (name, field) in &info_to_file {
-                if name.trim() == fk.to_field_name.trim() {
-                    to_field_type = field.as_ref().map(|f| f.field_type);
+            for field in &info_to_file.clone() {
+                if field.field_name.trim() == fk.to_field_name.trim() {
+                    to_field_type = Some(field.field.field_type);
                 }
             }
 
             // check if the types match
             if let (Some(from_type), Some(to_type)) = (from_field_type, to_field_type) {
                 if from_type != to_type {
-                    return Err(format!("Field types don't match for foreign key from '{}' to '{}'", fk.to_field_name, fk.to_table_name));
+                    return Err(AssertFailure {
+                        path: file!().to_string(),
+                        line: line!() as usize,
+                        msg:  format!("Field types don't match for foreign key from '{}' to \
+                        '{}'", fk.to_field_name, fk.to_table_name).to_string()
+                    })
                 }
             }
+            record.push(format!("foreign key: {} -> {}.{}", table_name, fk
+                .to_table_name, fk.to_field_name));
 
-            // write the foreign key info to the file
-            writeln!(writer, "foreign key: {} -> {}.{}", info_file, fk.to_table_name, fk.to_field_name)
-                .map_err(|e| format!("Failed to write to the info file: {}", e))?;
         }
-
-        Ok(())
-    }
-    // TODO: deprecated code
-    pub fn get_info_from_file(&self, file_path: &str) -> HashMap<String, Option<Field>> {
-        let file = File::open(file_path.trim()).unwrap();
-        let reader = BufReader::new(file);
-
-        let mut fields_info = HashMap::new();
-        for line in reader.lines() {
-            let line = line.expect("Error while reading a line");
-            let parts: Vec<_> = line.split(',').map(|part| part).collect();
-            let parts_len = parts.clone().len();
-            if parts_len == 3 {
-                let field_name = parts[0].to_string();
-                let field_type = parts[1].to_string();
-                let mut is_null_str = parts[2].to_string();
-                let is_null = is_null_str.parse::<bool>().unwrap();
-                let field = Field {
-                    field_type: FieldType::from_str(&field_type).unwrap(),
-                    is_null: is_null,
-                };
-                fields_info.insert(field_name, Some(field));
-            } else {
-                fields_info.insert(parts[0].to_string(), None);
-            }
+        for rec in record {
+            ok_or_err!(writer.write_record(&[rec]));
         }
+        ok_or_err!(writer.flush());
 
-        fields_info
+        Ok(Ok(()))
     }
+
 }

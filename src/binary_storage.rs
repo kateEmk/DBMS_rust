@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
+use crate::prelude::FieldType;
 use serde_derive::{Deserialize, Serialize};
-
-use crate::field_type::FieldType;
 
 pub struct BinaryStorage {
     pub table_name: String,
@@ -27,7 +26,6 @@ pub struct ForeignKey {
     pub to_field_name: String,
 }
 
-
 impl Field {
     pub fn is_null(&self) -> bool {
         self.is_null
@@ -41,9 +39,10 @@ impl BinaryStorage {
 
     pub fn get_fields(&self) {
         for (name, field) in &self.fields {
-            println!("Field name - {}, field type - {:?}, field null - {}", name, field.field_type,
-                     field.is_null)
+            println!(
+                "Field name - {}, field type - {:?}, field null - {}",
+                name, field.field_type, field.is_null
+            )
         }
     }
 }
-

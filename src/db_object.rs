@@ -3,7 +3,7 @@ extern crate bincode;
 use csv::{Writer, WriterBuilder};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Write};
+use std::io::Write;
 use std::string::String;
 
 use crate::prelude::*;
@@ -30,7 +30,7 @@ impl DbObject {
         let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name)
             .trim()
             .to_string();
-        let mut table_file = ok_or_err!(File::create(&table_path));
+        let table_file = ok_or_err!(File::create(&table_path));
 
         let mut csv_writer = WriterBuilder::new()
             .delimiter(b',')
@@ -38,7 +38,7 @@ impl DbObject {
             .from_writer(table_file);
         ok_or_err!(csv_writer.write_record(fields.keys().clone().collect::<Vec<_>>()));
 
-        ok_or_err!(self.create_table_info(&table_name.to_string(), fields));
+        ok_or_err!(self.create_table_info(&table_name, fields));
 
         // FIXME: rebuild fk building mechanism
         if !fks.is_empty() { self.add_fks(table_name.clone(), fks); };
@@ -76,7 +76,7 @@ impl DbObject {
     }
 
     pub fn read_table_info(&self, table_name: &str) -> Result<Vec<FieldInfo>, AssertFailure> {
-        let mut table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name)
+        let table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name)
             .trim()
             .to_string();
         let mut info_file = ok_or_err!(File::open(table_info_path));
@@ -91,7 +91,7 @@ impl DbObject {
                     path: file!().to_string(),
                     line: line!() as usize,
                     msg: format!("Error while deserializing table info for table {}: {}",
-                                 table_name, e.to_string()),
+                                 table_name, e),
                 })
             }
         }
@@ -99,16 +99,13 @@ impl DbObject {
 
     pub fn add_fks(
         &self,
-        mut table_name: String,
+        table_name: String,
         fks: Vec<ForeignKey>,
     ) -> std::result::Result<csv::Result<()>, AssertFailure> {
         let info_from_file: Vec<FieldInfo> = ok_or_err!(self.read_table_info(table_name.as_str()));
         let file = ok_or_err!(File::open(format!("{}/{}/{}_info", self.path, self.name,
             table_name)));
-        let mut writer = WriterBuilder::new()
-            .delimiter(b',')
-            .quote_style(csv::QuoteStyle::Always)
-            .from_writer(file);
+        let mut writer = Writer::from_writer(file);
 
         let mut record: Vec<String> = Vec::new();
 
@@ -138,7 +135,7 @@ impl DbObject {
                         path: file!().to_string(),
                         line: line!() as usize,
                         msg:  format!("Field types don't match for foreign key from '{}' to \
-                        '{}'", fk.to_field_name, fk.to_table_name).to_string()
+                        '{}'", fk.to_field_name, fk.to_table_name)
                     })
                 }
             }

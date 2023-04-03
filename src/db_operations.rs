@@ -29,8 +29,8 @@ pub fn get_db(db_path: String, db_name: String) -> Option<DbObject> {
 
     if db_folder.exists() && db_folder.is_dir() {
         let db_object = DbObject {
-            name: db_name.clone(),
-            path: db_path.clone(),
+            name: db_name,
+            path: db_path,
         };
         Some(db_object)
     } else {

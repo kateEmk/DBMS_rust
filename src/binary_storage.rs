@@ -3,18 +3,19 @@ use std::collections::HashMap;
 use crate::prelude::FieldType;
 use serde_derive::{Deserialize, Serialize};
 
+/// FIXME: use this struct for writing to the relations.csv file
 pub struct BinaryStorage {
     pub table_name: String,
     pub fields: HashMap<String, Field>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Field {
     pub field_type: FieldType,
     pub is_null: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FieldInfo {
     pub field: Field,
     pub field_name: String,

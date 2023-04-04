@@ -2,8 +2,8 @@ extern crate bincode;
 
 use csv::{Writer, WriterBuilder};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{BufWriter, Write};
 use std::string::String;
 
 use crate::prelude::*;
@@ -14,18 +14,29 @@ pub struct DbObject {
     pub path: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct TableObject {
-    pub db_name: String,
-    pub table_name: String,
-}
-
 impl DbObject {
+    /// This function create table in the database path from db object
+    /// # Arguments
+    ///
+    /// * `table_name` - Name of the table to create
+    /// * `fields` - Vector of fields (table header)
+    /// * `foreign_keys` - Vector of foreign keys, it also can be empty
+    ///
+    /// # Examples
+    /// ```
+    /// use std::collections::HashMap;
+    /// use dbms_rust::prelude::{Field, FieldType};
+    /// let mut fields_first: HashMap<String, Field> = HashMap::from([
+    /// ("id".to_string(), Field { field_type: FieldType::Int, is_null: false }),
+    /// ("name".to_string(), Field { field_type: FieldType::Text, is_null: false})]);
+    /// let table_obj_first = db_object.create_table(table_name, fields, vec![]);
+    /// ```
+    ///
     pub fn create_table(
         &self,
         table_name: String,
         fields: HashMap<String, Field>,
-        fks: Vec<ForeignKey>,
+        foreign_keys: Vec<ForeignKey>,
     ) -> std::result::Result<TableObject, AssertFailure> {
         let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name)
             .trim()
@@ -40,17 +51,27 @@ impl DbObject {
 
         ok_or_err!(self.create_table_info(&table_name, fields));
 
-        // FIXME: rebuild fk building mechanism
-        if !fks.is_empty() { self.add_fks(table_name.clone(), fks); };
+        let table_object = TableObject {
+            db_name: self.name.clone(),
+            table_name,
+        };
+
+        // FIXME: add remark to the type to mention that it is fk
+        if !foreign_keys.is_empty() {
+            ok_or_err!(self.add_fks(table_object.clone(), foreign_keys));
+        };
 
         ok!(csv_writer.flush());
 
-        Ok(TableObject {
-            db_name: self.name.clone(),
-            table_name,
-        })
+        Ok(table_object)
     }
 
+    /// This function create binary file with info about table fields
+    /// # Arguments
+    ///
+    /// * `table_name` - Name of the table to create
+    /// * `fields` - Vector of fields (table header)
+    ///
     pub fn create_table_info(
         &self,
         table_name: &str,
@@ -75,43 +96,28 @@ impl DbObject {
         Ok(())
     }
 
-    pub fn read_table_info(&self, table_name: &str) -> Result<Vec<FieldInfo>, AssertFailure> {
-        let table_info_path = format!("{}/{}/{}_info", self.path, self.name, table_name)
-            .trim()
-            .to_string();
-        let mut info_file = ok_or_err!(File::open(table_info_path));
-        let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> =
-            bincode::deserialize_from(&mut info_file);
-        return match fields_info_result {
-            Ok(fields_info) => {
-                Ok(fields_info)
-            }
-            Err(e) => {
-                Err(AssertFailure {
-                    path: file!().to_string(),
-                    line: line!() as usize,
-                    msg: format!("Error while deserializing table info for table {}: {}",
-                                 table_name, e),
-                })
-            }
-        }
-    }
-
+    /// This function add relations between table. It make record to `relations.csv` file.
+    /// # Arguments
+    ///
+    /// * `table_obj` - Table object. It has name of table and database.
+    /// * `foreign_keys` - Array of foreign keys, that we pass into `create_table` function.
+    ///
     pub fn add_fks(
         &self,
-        table_name: String,
-        fks: Vec<ForeignKey>,
+        table_obj: TableObject,
+        foreign_keys: Vec<ForeignKey>,
     ) -> std::result::Result<csv::Result<()>, AssertFailure> {
-        let info_from_file: Vec<FieldInfo> = ok_or_err!(self.read_table_info(table_name.as_str()));
-        let file = ok_or_err!(File::open(format!("{}/{}/{}_info", self.path, self.name,
-            table_name)));
-        let mut writer = Writer::from_writer(file);
+        let info_from_file: Vec<FieldInfo> =
+            ok_or_err!(table_obj.read_table_info(self.path.clone()));
+        let file = ok_or_err!(OpenOptions::new()
+            .write(true)
+            .truncate(false)
+            .open(format!("{}/{}/relations.csv", self.path, self.name).trim()));
+        let mut writer = csv::Writer::from_writer(BufWriter::new(file));
 
-        let mut record: Vec<String> = Vec::new();
-
-        for fk in &fks {
-            let info_to_file: Vec<FieldInfo> = ok_or_err!(self.read_table_info(fk.to_table_name
-                .as_str()));
+        for fk in &foreign_keys {
+            let info_to_file: Vec<FieldInfo> =
+                ok_or_err!(table_obj.read_table_info(self.path.clone()));
 
             // find the types of the fields in the foreign key
             let mut from_field_type: Option<FieldType> = None;
@@ -119,12 +125,12 @@ impl DbObject {
 
             for field in info_from_file.clone() {
                 if field.field_name.trim() == fk.to_field_name.trim() {
-                    from_field_type = Some(field.field.field_type);
+                    from_field_type = Some(field.clone().field.field_type);
                 }
             }
             for field in &info_to_file.clone() {
                 if field.field_name.trim() == fk.to_field_name.trim() {
-                    to_field_type = Some(field.field.field_type);
+                    to_field_type = Some(field.clone().field.field_type);
                 }
             }
 
@@ -134,21 +140,23 @@ impl DbObject {
                     return Err(AssertFailure {
                         path: file!().to_string(),
                         line: line!() as usize,
-                        msg:  format!("Field types don't match for foreign key from '{}' to \
-                        '{}'", fk.to_field_name, fk.to_table_name)
-                    })
+                        msg: format!(
+                            "Field types don't match for foreign key from '{}' to \
+                        '{}'",
+                            fk.to_field_name, fk.to_table_name
+                        ),
+                    });
                 }
             }
-            record.push(format!("foreign key: {} -> {}.{}", table_name, fk
-                .to_table_name, fk.to_field_name));
 
-        }
-        for rec in record {
-            ok_or_err!(writer.write_record(&[rec]));
+            ok_or_err!(writer.write_record(&[
+                table_obj.clone().table_name,
+                fk.to_table_name.to_string(),
+                fk.to_field_name.to_string()
+            ]));
         }
         ok_or_err!(writer.flush());
 
         Ok(Ok(()))
     }
-
 }

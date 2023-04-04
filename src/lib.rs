@@ -6,12 +6,17 @@ pub mod utils;
 pub mod binary_storage;
 pub mod field_type;
 pub mod errors;
+pub mod tb_object;
+
+extern crate blob;
+extern crate bincode;
 
 pub mod prelude {
-    pub use crate::db_object::{TableObject, DbObject};
+    pub use crate::db_object::DbObject;
     pub use crate::db_operations::*;
     pub use crate::utils::asserts::*;
     pub use crate::binary_storage::*;
     pub use crate::field_type::FieldType;
-    pub use crate::errors::errors::ServiceError;
+    pub use crate::errors::error::ServiceError;
+    pub use crate::tb_object::TableObject;
 }

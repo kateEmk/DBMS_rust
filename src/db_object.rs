@@ -37,7 +37,7 @@ impl DbObject {
         table_name: String,
         fields: HashMap<String, Field>,
         foreign_keys: Vec<ForeignKey>,
-    ) -> std::result::Result<TableObject, AssertFailure> {
+    ) -> std::result::Result<TableObject, OperationFailure> {
         let table_path = format!("{}/{}/{}.csv", self.path, self.name, table_name)
             .trim()
             .to_string();
@@ -61,7 +61,7 @@ impl DbObject {
             ok_or_err!(self.add_fks(table_object.clone(), foreign_keys));
         };
 
-        ok!(csv_writer.flush());
+        ok_or_err!(csv_writer.flush());
 
         Ok(table_object)
     }
@@ -76,23 +76,19 @@ impl DbObject {
         &self,
         table_name: &str,
         fields: HashMap<String, Field>,
-    ) -> std::result::Result<(), AssertFailure> {
+    ) -> std::result::Result<(), OperationFailure> {
         let info_table_path = format!("{}/{}/{}_info", self.path, self.name, table_name)
             .trim()
             .to_string();
 
         let mut fields_info = vec![];
         for (field_name, field_obj) in &fields {
-            fields_info.push(FieldInfo {
-                field: field_obj.clone(),
-                field_name: field_name.to_string(),
-            })
+            fields_info.push(FieldInfo { field: field_obj.clone(), field_name: field_name.to_string() })
         }
         let encoded = ok_or_err!(bincode::serialize(&fields_info));
 
         let mut file = ok_or_err!(File::create(info_table_path.as_str()));
-        ok!(file.write_all(&encoded));
-
+        ok_or_err!(file.write_all(&encoded));
         Ok(())
     }
 
@@ -106,7 +102,7 @@ impl DbObject {
         &self,
         table_obj: TableObject,
         foreign_keys: Vec<ForeignKey>,
-    ) -> std::result::Result<csv::Result<()>, AssertFailure> {
+    ) -> std::result::Result<(), OperationFailure> {
         let info_from_file: Vec<FieldInfo> =
             ok_or_err!(table_obj.read_table_info(self.path.clone()));
         let file = ok_or_err!(OpenOptions::new()
@@ -137,7 +133,7 @@ impl DbObject {
             // check if the types match
             if let (Some(from_type), Some(to_type)) = (from_field_type, to_field_type) {
                 if from_type != to_type {
-                    return Err(AssertFailure {
+                    return Err(OperationFailure {
                         path: file!().to_string(),
                         line: line!() as usize,
                         msg: format!(
@@ -157,6 +153,6 @@ impl DbObject {
         }
         ok_or_err!(writer.flush());
 
-        Ok(Ok(()))
+        Ok(())
     }
 }

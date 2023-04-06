@@ -1,13 +1,5 @@
-use std::collections::HashMap;
-
 use crate::prelude::FieldType;
 use serde_derive::{Deserialize, Serialize};
-
-/// FIXME: use this struct for writing to the relations.csv file
-pub struct BinaryStorage {
-    pub table_name: String,
-    pub fields: HashMap<String, Field>,
-}
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Field {
@@ -30,20 +22,5 @@ pub struct ForeignKey {
 impl Field {
     pub fn is_null(&self) -> bool {
         self.is_null
-    }
-}
-
-impl BinaryStorage {
-    pub fn get_type(&self, name: String) -> FieldType {
-        self.fields.get(&name).unwrap().field_type
-    }
-
-    pub fn get_fields(&self) {
-        for (name, field) in &self.fields {
-            println!(
-                "Field name - {}, field type - {:?}, field null - {}",
-                name, field.field_type, field.is_null
-            )
-        }
     }
 }

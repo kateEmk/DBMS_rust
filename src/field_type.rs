@@ -30,6 +30,7 @@ pub enum FieldType {
     // Varchar with a maximum length
     Text,
     Blob,
+    Incorrect
 }
 
 impl FieldType {
@@ -50,6 +51,32 @@ impl FieldType {
             "text" => Some(FieldType::Text),
             "blob" => Some(FieldType::Blob),
             _ => None,
+        }
+    }
+
+    pub fn convert_value_type_from_str(v: &str) -> FieldType {
+        let mut typ: Option<FieldType> = None;
+        let len = v.len();
+
+        if let Ok(v) = v.parse::<i32>() {
+            typ = Some(FieldType::Int);
+        } else if let Ok(v) = v.parse::<f32>() {
+            typ = Some(FieldType::Float);
+        } else if let Ok(v) = v.parse::<f64>() {
+            typ = Some(FieldType::Double);
+        } else if let Ok(v) = v.parse::<String>() {
+            typ = Some(FieldType::Text);
+        } else if len > 6 && &v[..6] == "VARCHAR" {
+            if let Ok(max_len) = v[7..len - 1].parse::<usize>() {
+                typ = Some(FieldType::Varchar(max_len));
+            }
+        } else if len == 4 && &v[..4] == "BLOB" {
+            typ = Some(FieldType::Blob);
+        }
+
+        return match typ {
+            Some(ty) => ty,
+            None => FieldType::Incorrect,
         }
     }
 }

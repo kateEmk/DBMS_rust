@@ -1,10 +1,10 @@
 use crate::prelude::{fail_inner, ok_or_err};
-use crate::prelude::{AssertFailure, DbObject};
+use crate::prelude::{OperationFailure, DbObject};
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::PathBuf;
 
-pub fn create_db(db_path: String, db_name: String) -> Result<DbObject, AssertFailure> {
+pub fn create_db(db_path: String, db_name: String) -> Result<DbObject, OperationFailure> {
     let dir_path = format!("{}/{}", db_path, db_name).trim().to_string();
 
     match fs::create_dir_all(dir_path.as_str()) {
@@ -22,7 +22,7 @@ pub fn create_db(db_path: String, db_name: String) -> Result<DbObject, AssertFai
             })
         }
 
-        Err(e) => Err(AssertFailure {
+        Err(e) => Err(OperationFailure {
             path: file!().to_string(),
             line: line!() as usize,
             msg: format!("Failed to create database, error message: {:?}", e),

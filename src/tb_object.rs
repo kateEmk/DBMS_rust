@@ -13,6 +13,7 @@ pub struct TableObject {
     pub table_name: String,
 }
 
+
 impl TableObject {
     /// This function reads file, which stores info about fields.
     /// # Arguments
@@ -71,5 +72,30 @@ impl TableObject {
         );
         ok_or_service_err!(writer.flush());
         Ok(())
+    }
+
+
+    /// TODO: FINISH THIS METHODS (editing table)
+    ///
+    pub fn edit_record(&self) -> Result<(), HandlerError> {
+        unimplemented!()
+    }
+
+    pub fn edit_field(&self) -> Result<(), HandlerError> {
+        unimplemented!()
+    }
+
+    pub fn delete_record(&self) -> Result<(), HandlerError> {
+        unimplemented!()
+    }
+
+    pub fn delete_row(&self) -> Result<(), HandlerError> {
+        unimplemented!()
+    }
+
+    /// TODO: FINISH THIS METHODS (actions with full table)
+    ///
+    pub fn delete_table(&self) -> Result<(), HandlerError> {
+        unimplemented!()
     }
 }

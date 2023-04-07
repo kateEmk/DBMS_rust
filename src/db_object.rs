@@ -27,8 +27,8 @@ impl DbObject {
     /// use std::collections::HashMap;
     /// use dbms_rust::prelude::{Field, FieldType};
     /// let mut fields_first: HashMap<String, Field> = HashMap::from([
-    /// ("id".to_string(), Field { field_type: FieldType::Int, is_null: false }),
-    /// ("name".to_string(), Field { field_type: FieldType::Text, is_null: false})]);
+    /// ("id".to_string(), Field { field_type: FieldType::Int, is_null: false, is_fk: false }),
+    /// ("name".to_string(), Field { field_type: FieldType::Text, is_null: false, is_fk: false})]);
     /// let table_obj_first = db_object.create_table(table_name, fields, vec![]);
     /// ```
     ///
@@ -56,7 +56,6 @@ impl DbObject {
             table_name,
         };
 
-        // FIXME: add remark to the type to mention that it is fk
         if !foreign_keys.is_empty() {
             ok_or_err!(self.add_fks(table_object.clone(), foreign_keys));
         };
@@ -119,13 +118,15 @@ impl DbObject {
             let mut from_field_type: Option<FieldType> = None;
             let mut to_field_type: Option<FieldType> = None;
 
-            for field in info_from_file.clone() {
+            for mut field in info_from_file.clone() {
                 if field.field_name.trim() == fk.to_field_name.trim() {
+                    field.field.is_fk = true;
                     from_field_type = Some(field.clone().field.field_type);
                 }
             }
             for field in &info_to_file.clone() {
                 if field.field_name.trim() == fk.to_field_name.trim() {
+                    field.clone().field.is_fk = true;
                     to_field_type = Some(field.clone().field.field_type);
                 }
             }

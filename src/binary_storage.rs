@@ -5,6 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 pub struct Field {
     pub field_type: FieldType,
     pub is_null: bool,
+    pub is_fk: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

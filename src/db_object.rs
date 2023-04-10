@@ -49,14 +49,14 @@ impl DbObject {
             .from_writer(table_file);
         ok_or_err!(csv_writer.write_record(fields.keys().clone().collect::<Vec<_>>()));
 
-        ok_or_err!(self.create_table_info(&table_name, fields));
+        ok_or_err!(self.create_table_info(&table_name, fields.clone()));
 
         let table_object = TableObject {
             db_name: self.name.clone(),
             table_name,
         };
 
-        if !foreign_keys.is_empty() {
+        if !foreign_keys.is_empty() || fields.clone().values().any(|field| field.is_fk == true) {
             ok_or_err!(self.add_fks(table_object.clone(), foreign_keys));
         };
 

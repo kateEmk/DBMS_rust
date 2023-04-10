@@ -2,7 +2,7 @@ use crate::prelude::FieldType;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct FieFieldld {
+pub struct Field {
     pub field_type: FieldType,
     pub is_null: bool,
     pub is_fk: bool,

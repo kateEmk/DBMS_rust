@@ -7,7 +7,9 @@ pub enum ServiceError {
     FileNotFound,
     CreateFileError(String),
     TypeDoesntMatch,
-    ErrorAddingToTheFile
+    ErrorAddingToTheFile,
+    TooManyArgs,
+    RecordDoesntExist
 }
 
 impl fmt::Display for ServiceError {
@@ -19,6 +21,8 @@ impl fmt::Display for ServiceError {
             type of the column."),
             ServiceError::ErrorAddingToTheFile => write!(f, "Error while adding record to the file\
             ."),
+            ServiceError::TooManyArgs => write!(f, "Too many arguments were given."),
+            ServiceError::RecordDoesntExist => write!(f, "Record in this table doesn't exist."),
         }
     }
 }
@@ -31,5 +35,7 @@ pub enum HandlerError {
     TableError(#[from] TableFailure),
     #[error("{0}")]
     OperationError(#[from] OperationFailure),
+    #[error("{0}")]
+    ServiceErrors(#[from] ServiceError),
 }
 pub type HandlerResult<T = ()> = Result<T, HandlerError>;

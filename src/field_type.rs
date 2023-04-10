@@ -34,7 +34,7 @@ pub enum FieldType {
 }
 
 impl FieldType {
-    pub fn from_str(s: &str) -> Option<FieldType> {
+    pub fn from_str(s: &String) -> Option<FieldType> {
         match s.to_lowercase().as_str() {
             "int" => Some(FieldType::Int),
             "float" => Some(FieldType::Float),

@@ -46,11 +46,7 @@ impl TableObject {
         db_path: String,
         record: HashMap<String, String>,
     ) -> std::result::Result<(), HandlerError> {
-        let table = ok_or_err!(OpenOptions::new()
-            .write(true)
-            .truncate(false)
-            .open(format!("{}/{}/{}.csv", db_path, self.db_name, self.table_name).trim()));
-        let mut writer = csv::Writer::from_writer(BufWriter::new(table));
+        let table_path = format!("{}/{}/{}.csv", db_path, self.db_name, self.table_name);
 
         let table_fields = self.read_table_info(db_path).unwrap();
         let mut fields: HashMap<String, FieldType> = HashMap::new();
@@ -80,8 +76,9 @@ impl TableObject {
         }
         println!("{:?}", line_record);
 
-        ok_or_service_err!(writer.write_record(&line_record.clone()));
-        ok_or_service_err!(writer.flush());
+        let mut writer = ok_or_err!(csv::Writer::from_path(&table_path));
+        ok_or_service_err!(writer.write_record(&line_record));
+        ok_or_service_err!(writer.into_inner());
         Ok(())
     }
 
@@ -202,8 +199,8 @@ impl TableObject {
         //     }
         // }
 
-        ok_or_err!(writer.write_record(line_record));
-        ok_or_err!(writer.flush());
+        writer.write_record(line_record);
+        writer.flush();
         Ok(())
     }
 

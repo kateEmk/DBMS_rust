@@ -27,8 +27,11 @@ impl DbObject {
     /// use std::collections::HashMap;
     /// use dbms_rust::prelude::{Field, FieldType};
     /// let mut fields_first: HashMap<String, Field> = HashMap::from([
-    /// ("id".to_string(), Field { field_type: FieldType::Int, is_null: false, is_fk: false }),
-    /// ("name".to_string(), Field { field_type: FieldType::Text, is_null: false, is_fk: false})]);
+    /// ("id".to_string(), Field { field_type: FieldType::Int, is_null: false, is_pk: true, is_fk:
+    /// false
+    /// }),
+    /// ("name".to_string(), Field { field_type: FieldType::Text, is_null: false, is_pk: false,
+    /// is_fk: false})]);
     /// let table_obj_first = db_object.create_table(table_name, fields, vec![]);
     /// ```
     ///
@@ -54,6 +57,7 @@ impl DbObject {
         let table_object = TableObject {
             db_name: self.name.clone(),
             table_name,
+            db_path: self.path.clone()
         };
 
         if !foreign_keys.is_empty() || fields.clone().values().any(|field| field.is_fk == true) {
@@ -103,7 +107,7 @@ impl DbObject {
         foreign_keys: Vec<ForeignKey>,
     ) -> std::result::Result<(), OperationFailure> {
         let info_from_file: Vec<FieldInfo> =
-            ok_or_err!(table_obj.read_table_info(self.path.clone()));
+            ok_or_err!(table_obj.read_table_info());
         let file = ok_or_err!(OpenOptions::new()
             .write(true)
             .truncate(false)
@@ -112,7 +116,7 @@ impl DbObject {
 
         for fk in &foreign_keys {
             let info_to_file: Vec<FieldInfo> =
-                ok_or_err!(table_obj.read_table_info(self.path.clone()));
+                ok_or_err!(table_obj.read_table_info());
 
             // find the types of the fields in the foreign key
             let mut from_field_type: Option<FieldType> = None;

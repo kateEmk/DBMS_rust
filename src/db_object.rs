@@ -108,11 +108,15 @@ impl DbObject {
     ) -> std::result::Result<(), OperationFailure> {
         let info_from_file: Vec<FieldInfo> =
             ok_or_err!(table_obj.read_table_info());
-        let file = ok_or_err!(OpenOptions::new()
-            .write(true)
-            .truncate(false)
+        let mut file = ok_or_err!(OpenOptions::new()
+            .append(true)
             .open(format!("{}/{}/relations.csv", self.path, self.name).trim()));
-        let mut writer = csv::Writer::from_writer(BufWriter::new(file));
+        let mut writer = csv::Writer::from_writer(file);
+        // let file = ok_or_err!(OpenOptions::new()
+        //     .write(true)
+        //     .truncate(false)
+        //     .open(format!("{}/{}/relations.csv", self.path, self.name).trim()));
+        // let mut writer = csv::Writer::from_writer(BufWriter::new(file));
 
         for fk in &foreign_keys {
             let info_to_file: Vec<FieldInfo> =

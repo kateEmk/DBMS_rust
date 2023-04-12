@@ -82,9 +82,12 @@ impl TableObject {
         }
         println!("{:?}", line_record);
 
-        let mut writer = ok_or_err!(csv::Writer::from_path(&table_path));
+        let mut file = ok_or_service_err!(OpenOptions::new()
+            .append(true)
+            .open(table_path));
+        let mut writer = csv::Writer::from_writer(file);
         ok_or_service_err!(writer.write_record(&line_record));
-        ok_or_service_err!(writer.into_inner());
+        ok_or_service_err!(writer.flush());
         Ok(())
     }
 

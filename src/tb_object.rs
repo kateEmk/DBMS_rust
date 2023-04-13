@@ -129,7 +129,7 @@ impl TableObject {
     /// This function edit record in the table.
     /// # Arguments
     ///
-    /// * `fields_to_change` - Hashmap with names of fields and its present values.
+    /// * `where_` - Hashmap with names of fields and its present values.
     /// * `changes` - Hashmap with names of fields and its future (new) values.
     pub fn edit_record(
         &self,

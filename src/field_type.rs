@@ -34,7 +34,7 @@ pub enum FieldType {
 }
 
 impl FieldType {
-    pub fn from_str(s: &String) -> Option<FieldType> {
+    pub fn get_type_from_str(s: &str) -> Option<FieldType> {
         match s.to_lowercase().as_str() {
             "int" => Some(FieldType::Int),
             "float" => Some(FieldType::Float),
@@ -74,7 +74,7 @@ impl FieldType {
             typ = Some(FieldType::Blob);
         }
 
-        return match typ {
+        match typ {
             Some(ty) => ty,
             None => FieldType::Incorrect,
         }

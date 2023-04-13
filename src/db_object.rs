@@ -3,7 +3,7 @@ extern crate bincode;
 use csv::{Writer, WriterBuilder};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::string::String;
 
 use crate::prelude::*;
@@ -60,7 +60,7 @@ impl DbObject {
             db_path: self.path.clone()
         };
 
-        if !foreign_keys.is_empty() || fields.clone().values().any(|field| field.is_fk == true) {
+        if !foreign_keys.is_empty() || fields.clone().values().any(|field| field.is_fk) {
             ok_or_err!(self.add_fks(table_object.clone(), foreign_keys));
         };
 
@@ -108,15 +108,10 @@ impl DbObject {
     ) -> std::result::Result<(), OperationFailure> {
         let info_from_file: Vec<FieldInfo> =
             ok_or_err!(table_obj.read_table_info());
-        let mut file = ok_or_err!(OpenOptions::new()
+        let file = ok_or_err!(OpenOptions::new()
             .append(true)
             .open(format!("{}/{}/relations.csv", self.path, self.name).trim()));
         let mut writer = csv::Writer::from_writer(file);
-        // let file = ok_or_err!(OpenOptions::new()
-        //     .write(true)
-        //     .truncate(false)
-        //     .open(format!("{}/{}/relations.csv", self.path, self.name).trim()));
-        // let mut writer = csv::Writer::from_writer(BufWriter::new(file));
 
         for fk in &foreign_keys {
             let info_to_file: Vec<FieldInfo> =

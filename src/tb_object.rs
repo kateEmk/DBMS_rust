@@ -1,12 +1,10 @@
 use crate::prelude::*;
 use serde_json;
-use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::error::Error;
 
-use crate::prelude::ServiceError::TooManyArgs;
+use crate::prelude::ServiceError::{TooManyArgs, TypeDoesntMatch};
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::string::String;
 use csv::{ReaderBuilder, StringRecord};
 
@@ -19,13 +17,9 @@ pub struct TableObject {
 
 impl TableObject {
     /// This function reads file, which stores info about fields.
-    /// # Arguments
-    ///
-    /// * `db_path` - Path to database, where table was created
-    ///
     pub fn read_table_info(&self) -> Result<Vec<FieldInfo>, HandlerError> {
         let table_info_path = format!("{}/{}/{}_info", self.db_path, self.db_name, self.table_name);
-        let mut info_file = ok_or_err!(File::open(table_info_path.clone().trim()));
+        let mut info_file = ok_or_err!(File::open(table_info_path.trim()));
         let fields_info_result: std::result::Result<Vec<FieldInfo>, bincode::Error> =
             bincode::deserialize_from(&mut info_file);
         Ok(ok_or_err!(fields_info_result))
@@ -39,13 +33,11 @@ impl TableObject {
     }
 
     pub fn get_path(&self) -> String {
-        return format!("{}/{}/{}.csv", self.db_path, self.db_name, self.table_name)
+        format!("{}/{}/{}.csv", self.db_path, self.db_name, self.table_name)
     }
 
     /// This function add record to the table. NOT TESTED YET.
     /// # Arguments
-    ///
-    /// * `db_path` - Path to database, where table was created.
     /// * `record` - Hashmap with value of fields and its types.
     ///
     pub fn add_record(
@@ -82,7 +74,7 @@ impl TableObject {
         }
         println!("{:?}", line_record);
 
-        let mut file = ok_or_service_err!(OpenOptions::new()
+        let file = ok_or_service_err!(OpenOptions::new()
             .append(true)
             .open(table_path));
         let mut writer = csv::Writer::from_writer(file);
@@ -131,6 +123,80 @@ impl TableObject {
             }
 
         }
+        Ok(())
+    }
+
+    /// This function edit record in the table.
+    /// # Arguments
+    ///
+    /// * `fields_to_change` - Hashmap with names of fields and its present values.
+    /// * `changes` - Hashmap with names of fields and its future (new) values.
+    pub fn edit_record(
+        &self,
+        where_: HashMap<String, String>,
+        changes: HashMap<String, String>,
+    ) -> Result<(), HandlerError> {
+        let table_path = self.get_path();
+        let table_fields = self.read_table_info().unwrap();
+        let headers = ok_or_err!(self.get_headers(table_fields.clone()));
+
+        if headers.len() < changes.keys().count() {
+            return Err(HandlerError::ServiceErrors(TooManyArgs));
+        }
+
+        let mut fields: HashMap<String, FieldType> = HashMap::new();
+        for field in &table_fields {
+            fields.insert(field.clone().field_name, field.clone().field.field_type);
+        }
+
+        let mut new_full_record: Vec<Vec<String>> = Vec::new();
+
+        let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(r_reader);
+
+        for records in reader.records() {
+            let record = ok_or_service_err!(records);
+            let mut line_record: Vec<String> = vec![];
+            let mut need_to_update = false;
+
+            for (i, column) in headers.iter().enumerate() {
+                let value = record.get(i).expect("Error wile getting a value");
+
+                if let Some(where_value) = where_.get(column) {
+                    if where_value == value {
+                        need_to_update = true;
+                        break;
+                    }
+                }
+            }
+
+            if !need_to_update {
+                new_full_record.push(record.clone().iter().map(|field| field.to_string()).collect());
+            } else {
+                for (i, column) in headers.iter().enumerate() {
+                    let current_value = record.get(i).expect("Error wile getting a value");
+                    if let Some(new_value) = changes.get(column) {
+                        if FieldType::convert_value_type_from_str(new_value.as_str())
+                            == FieldType::convert_value_type_from_str(current_value) {
+                            line_record.push(new_value.to_string());
+                        } else { return Err(HandlerError::ServiceErrors(TypeDoesntMatch)); }
+                    } else {
+                        line_record.push(current_value.to_string());
+                    }
+                }
+                new_full_record.push(line_record.clone());
+            }
+        }
+
+        // We need to rewrite full file.
+        let mut writer = ok_or_service_err!(csv::Writer::from_path(table_path.clone()));
+        for item in new_full_record {
+            ok_or_service_err!(writer.write_record(item));
+        }
+        ok_or_service_err!(writer.flush());
+
         Ok(())
     }
 

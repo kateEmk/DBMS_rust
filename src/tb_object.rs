@@ -144,11 +144,6 @@ impl TableObject {
             return Err(HandlerError::ServiceErrors(TooManyArgs));
         }
 
-        let mut fields: HashMap<String, FieldType> = HashMap::new();
-        for field in &table_fields {
-            fields.insert(field.clone().field_name, field.clone().field.field_type);
-        }
-
         let mut new_full_record: Vec<Vec<String>> = Vec::new();
 
         let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
@@ -200,14 +195,53 @@ impl TableObject {
         Ok(())
     }
 
-    /// TODO: decide keep this function or not
-    pub fn edit_field(&self) -> Result<(), HandlerError> {
-        unimplemented!()
-    }
+    pub fn delete_record(
+        &self,
+        where_: HashMap<String, String>
+    ) -> Result<(), HandlerError> {
+        let table_path = self.get_path();
+        let table_fields = self.read_table_info().unwrap();
+        let headers = ok_or_err!(self.get_headers(table_fields.clone()));
 
-    /// TODO: write
-    pub fn delete_record(&self) -> Result<(), HandlerError> {
-        unimplemented!()
+        let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(r_reader);
+
+        let mut new_full_record: Vec<Vec<String>> = Vec::new();
+
+        for records in reader.records() {
+            let record = ok_or_service_err!(records);
+            let mut need_to_delete = false;
+            let mut all_fields_match = true;
+
+            for (i, column) in headers.iter().enumerate() {
+                let value = record.get(i).expect("Error wile getting a value");
+
+                if let Some(where_value) = where_.get(column) {
+                    if where_value != value {
+                        all_fields_match = false;
+                    }
+                }
+            }
+
+            if all_fields_match {
+                need_to_delete = true;
+            }
+
+            if !need_to_delete {
+                new_full_record.push(record.clone().iter().map(|field| field.to_string()).collect());
+            }
+
+        }
+
+        let mut writer = ok_or_service_err!(csv::Writer::from_path(table_path.clone()));
+        for item in new_full_record {
+            ok_or_service_err!(writer.write_record(item));
+        }
+        ok_or_service_err!(writer.flush());
+
+        Ok(())
     }
 
     /// TODO: write

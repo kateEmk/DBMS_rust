@@ -2,7 +2,7 @@ use crate::prelude::*;
 use serde_json;
 use std::collections::HashMap;
 
-use crate::prelude::ServiceError::{TooManyArgs, TypeDoesntMatch};
+use crate::prelude::ServiceError::{RowDoesntExist, TooManyArgs, TypeDoesntMatch};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Write};
 use std::string::String;
@@ -46,7 +46,7 @@ impl TableObject {
     ) -> std::result::Result<(), HandlerError> {
         let table_path = self.get_path();
 
-        let table_fields = self.read_table_info().unwrap();
+        let table_fields = ok_or_service_err!(self.read_table_info());
         let mut fields: HashMap<String, FieldType> = HashMap::new();
 
         for field in &table_fields {
@@ -67,7 +67,7 @@ impl TableObject {
                 }
             } else {
                 return Err(HandlerError::TableError(TableFailure {
-                    record: serde_json::to_string(&record).unwrap(),
+                    record: ok_or_err!(serde_json::to_string(&record)),
                     msg: "Failed to add record".to_string(),
                 }));
             }
@@ -83,7 +83,7 @@ impl TableObject {
         Ok(())
     }
 
-    pub fn find_record_by_name(&self, csv_file: &str, value: &str) -> Result<Option<StringRecord>,
+     fn _find_record_by_name(&self, csv_file: &str, value: &str) -> Result<Option<StringRecord>,
         HandlerError> {
         let file = ok_or_err!(File::open(csv_file));
         let mut buf_reader = BufReader::new(file);
@@ -101,7 +101,7 @@ impl TableObject {
         Ok(None)
     }
 
-    pub fn select(self) -> Result<(), HandlerError> {
+     fn _select(self) -> Result<(), HandlerError> {
         let table_path = self.get_path();
         let reader = BufReader::new(File::open(table_path).unwrap());
         let mut csv_reader = csv::Reader::from_reader(reader);
@@ -137,7 +137,7 @@ impl TableObject {
         changes: HashMap<String, String>,
     ) -> Result<(), HandlerError> {
         let table_path = self.get_path();
-        let table_fields = self.read_table_info().unwrap();
+        let table_fields = ok_or_service_err!(self.read_table_info());
         let headers = ok_or_err!(self.get_headers(table_fields.clone()));
 
         if headers.len() < changes.keys().count() {
@@ -200,7 +200,7 @@ impl TableObject {
         where_: HashMap<String, String>
     ) -> Result<(), HandlerError> {
         let table_path = self.get_path();
-        let table_fields = self.read_table_info().unwrap();
+        let table_fields = ok_or_service_err!(self.read_table_info());
         let headers = ok_or_err!(self.get_headers(table_fields.clone()));
 
         let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
@@ -244,9 +244,34 @@ impl TableObject {
         Ok(())
     }
 
-    /// TODO: write
-    pub fn delete_row(&self) -> Result<(), HandlerError> {
-        unimplemented!()
+    /// TODO: finish
+    pub fn delete_row(
+        &self,
+        row_name: &str
+    ) -> Result<(), HandlerError> {
+        // 1. DONE check that this row is in headers
+        //  - DONE if not -> error
+        // 2. check that this row is fk
+        //  - if yes -> give a message to user;
+        //              delete relation in relations.csv
+        //              delete row
+        //  - if not -> delete row
+
+        let table_path = self.get_path();
+        let table_fields = ok_or_service_err!(self.read_table_info());
+        let headers = ok_or_err!(self.get_headers(table_fields.clone()));
+        if !headers.contains(&row_name.to_string()) {
+            return Err(HandlerError::ServiceErrors(RowDoesntExist))
+        }
+
+        let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(r_reader);
+
+
+
+        Ok(())
     }
 
     /// TODO: write

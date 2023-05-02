@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use crate::prelude::ServiceError::{RowDoesntExist, TooManyArgs, TypeDoesntMatch};
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::path::Path;
 use std::string::String;
 use csv::{ReaderBuilder, StringRecord};
 
@@ -13,6 +14,22 @@ pub struct TableObject {
     pub db_name: String,
     pub table_name: String,
     pub db_path: String,
+}
+
+pub struct Record {
+    from_table: String,
+    to_table: String,
+    field: String,
+}
+
+impl Record {
+    fn new(from_table: String, to_table: String, field: String) -> Self {
+        Record {
+            from_table,
+            to_table,
+            field,
+        }
+    }
 }
 
 impl TableObject {
@@ -146,10 +163,10 @@ impl TableObject {
 
         let mut new_full_record: Vec<Vec<String>> = Vec::new();
 
-        let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
+        let buf_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(r_reader);
+            .from_reader(buf_reader);
 
         for records in reader.records() {
             let record = ok_or_service_err!(records);
@@ -203,10 +220,10 @@ impl TableObject {
         let table_fields = ok_or_service_err!(self.read_table_info());
         let headers = ok_or_err!(self.get_headers(table_fields.clone()));
 
-        let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
+        let buf_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(r_reader);
+            .from_reader(buf_reader);
 
         let mut new_full_record: Vec<Vec<String>> = Vec::new();
 
@@ -244,19 +261,73 @@ impl TableObject {
         Ok(())
     }
 
-    /// TODO: finish
+    pub fn _read_relations_data(&self) -> Result<Vec<Record>, HandlerError> {
+        let relations_file_path = format!("{}/{}/relations.csv", self.db_path, self
+            .db_name);
+
+        let buf_reader = ok_or_service_err!(File::open(relations_file_path.clone()));
+        let reader = BufReader::new(buf_reader);
+
+        let mut result: Vec<Record> = Vec::new();
+
+        for records in reader.lines() {
+            let record = ok_or_err!(records);
+
+            let fields: Vec<&str> = record.split(',').collect();
+            let line = Record::new(
+                fields[0].to_string(),
+                fields[1].to_string(),
+                fields[2].to_string(),
+            );
+            result.push(line);
+        }
+
+        Ok(result)
+    }
+
+    pub fn delete_fks(
+        &self,
+        row_name: String
+    ) -> Result<(), HandlerError> {
+        let relations_file_path = format!("{}/{}/relations.csv", self.db_path, self.db_name);
+        let buf_reader = ok_or_service_err!(File::open(relations_file_path.clone()));
+        let reader = BufReader::new(buf_reader);
+
+        let mut new_full_record: Vec<Record> = Vec::new();
+
+        for records in reader.lines() {
+            let record = ok_or_err!(records);
+
+            let fields: Vec<&str> = record.split(',').collect();
+            if (fields[0] == self.table_name && fields[2] == row_name)
+                || (fields[1] == self.table_name && fields[2] == row_name) {
+                println!("Row {} is a foreign key, it will be deleted.", row_name.clone());
+                continue;
+            } else {
+                let line = Record::new(
+                    fields[0].to_string(),
+                    fields[1].to_string(),
+                    fields[2].to_string(),
+                );
+                new_full_record.push(line);
+            }
+        }
+
+        let mut writer = ok_or_service_err!(csv::Writer::from_path(relations_file_path.clone()));
+        for item in new_full_record.into_iter() {
+            ok_or_service_err!(writer.write_record([&item.from_table, &item.to_table, &item
+                .field]));
+        }
+        ok_or_service_err!(writer.flush());
+
+        Ok(())
+    }
+
+    //FIXME
     pub fn delete_row(
         &self,
         row_name: &str
     ) -> Result<(), HandlerError> {
-        // 1. DONE check that this row is in headers
-        //  - DONE if not -> error
-        // 2. check that this row is fk
-        //  - if yes -> give a message to user;
-        //              delete relation in relations.csv
-        //              delete row
-        //  - if not -> delete row
-
         let table_path = self.get_path();
         let table_fields = ok_or_service_err!(self.read_table_info());
         let headers = ok_or_err!(self.get_headers(table_fields.clone()));
@@ -264,12 +335,32 @@ impl TableObject {
             return Err(HandlerError::ServiceErrors(RowDoesntExist))
         }
 
-        let r_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
+        let buf_reader = BufReader::new(ok_or_service_err!(File::open(table_path.clone())));
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(r_reader);
+            .from_reader(buf_reader);
 
+        self.delete_fks(row_name.to_string());
 
+        let mut new_full_record: Vec<Vec<String>> = Vec::new();
+
+        for row_result in reader.records()
+        {
+            let row = ok_or_err!(row_result);
+            let mut row_fields: Vec<String> = row.iter().map(|s| s.to_string()).collect();
+
+            if let Some(index) = headers.iter().position(|f| f == row_name) {
+                row_fields.remove(index);
+            }
+
+            new_full_record.push(row_fields);
+        }
+
+        let mut writer = ok_or_service_err!(csv::Writer::from_path(table_path.clone()));
+        for item in new_full_record {
+            ok_or_service_err!(writer.write_record(item));
+        }
+        ok_or_service_err!(writer.flush());
 
         Ok(())
     }

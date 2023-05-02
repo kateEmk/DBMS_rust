@@ -2,10 +2,9 @@ use crate::prelude::*;
 use serde_json;
 use std::collections::HashMap;
 
-use crate::prelude::ServiceError::{RowDoesntExist, TooManyArgs, TypeDoesntMatch};
+use crate::prelude::*;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::Path;
 use std::string::String;
 use csv::{ReaderBuilder, StringRecord};
 
@@ -14,22 +13,6 @@ pub struct TableObject {
     pub db_name: String,
     pub table_name: String,
     pub db_path: String,
-}
-
-pub struct Record {
-    from_table: String,
-    to_table: String,
-    field: String,
-}
-
-impl Record {
-    fn new(from_table: String, to_table: String, field: String) -> Self {
-        Record {
-            from_table,
-            to_table,
-            field,
-        }
-    }
 }
 
 impl TableObject {
@@ -340,7 +323,7 @@ impl TableObject {
             .has_headers(true)
             .from_reader(buf_reader);
 
-        self.delete_fks(row_name.to_string());
+        ok_or_service_err!(self.delete_fks(row_name.to_string()));
 
         let mut new_full_record: Vec<Vec<String>> = Vec::new();
 

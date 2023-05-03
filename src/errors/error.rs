@@ -10,7 +10,8 @@ pub enum ServiceError {
     ErrorAddingToTheFile,
     TooManyArgs,
     RecordDoesntExist,
-    RowDoesntExist
+    RowDoesntExist,
+    FailedToDeleteFile
 }
 
 impl fmt::Display for ServiceError {
@@ -25,8 +26,8 @@ impl fmt::Display for ServiceError {
             ServiceError::TooManyArgs => write!(f, "Too many arguments were given."),
             ServiceError::RecordDoesntExist => write!(f, "Record in this table doesn't exist."),
             ServiceError::RowDoesntExist => write!(f, "This row doesn't seem to be exist in the \
-            table\
-            ."),
+            table."),
+            ServiceError::FailedToDeleteFile => write!(f, "Failed to delete file with table data."),
         }
     }
 }

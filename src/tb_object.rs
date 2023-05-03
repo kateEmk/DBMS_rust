@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::prelude::*;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::string::String;
 use csv::{ReaderBuilder, StringRecord};
 
@@ -268,7 +269,7 @@ impl TableObject {
         Ok(result)
     }
 
-    pub fn delete_fks(
+    pub fn delete_fks_with_row(
         &self,
         row_name: String
     ) -> Result<(), HandlerError> {
@@ -306,7 +307,42 @@ impl TableObject {
         Ok(())
     }
 
-    //FIXME
+    pub fn delete_fks_with_table(
+        &self
+    ) -> Result<(), HandlerError> {
+        let relations_file_path = format!("{}/{}/relations.csv", self.db_path, self.db_name);
+        let buf_reader = ok_or_service_err!(File::open(relations_file_path.clone()));
+        let reader = BufReader::new(buf_reader);
+
+        let mut new_full_record: Vec<Record> = Vec::new();
+
+        for records in reader.lines() {
+            let record = ok_or_err!(records);
+
+            let fields: Vec<&str> = record.split(',').collect();
+            if fields[0] == self.table_name || fields[1] == self.table_name {
+                println!("Row {} is a foreign key, it will be deleted.", fields[2]);
+                continue;
+            } else {
+                let line = Record::new(
+                    fields[0].to_string(),
+                    fields[1].to_string(),
+                    fields[2].to_string(),
+                );
+                new_full_record.push(line);
+            }
+        }
+
+        let mut writer = ok_or_service_err!(csv::Writer::from_path(relations_file_path.clone()));
+        for item in new_full_record.into_iter() {
+            ok_or_service_err!(writer.write_record([&item.from_table, &item.to_table, &item
+                .field]));
+        }
+        ok_or_service_err!(writer.flush());
+
+        Ok(())
+    }
+
     pub fn delete_row(
         &self,
         row_name: &str
@@ -323,7 +359,7 @@ impl TableObject {
             .has_headers(true)
             .from_reader(buf_reader);
 
-        ok_or_service_err!(self.delete_fks(row_name.to_string()));
+        ok_or_service_err!(self.delete_fks_with_row(row_name.to_string()));
 
         let mut new_full_record: Vec<Vec<String>> = Vec::new();
 
@@ -348,8 +384,29 @@ impl TableObject {
         Ok(())
     }
 
-    /// TODO: write
     pub fn delete_table(&self) -> Result<(), HandlerError> {
-        unimplemented!()
+        //FIXME: understand, why we couldn't delete files and fix the bug
+
+        let path_info_file = format!("{}/{}/{}_info", self.db_path, self.db_name, self.table_name);
+        let mut perms = ok_or_service_err!(std::fs::metadata(&path_info_file)).permissions();
+        // Add write and execute permissions for the owner of the file
+        let mode = perms.mode();
+        let new_mode = mode | 0o300; // add write and execute permissions
+        perms.set_mode(new_mode);
+        ok_or_service_err!(std::fs::set_permissions(&path_info_file, perms));
+        ok_or_service_err!(std::fs::remove_file(&path_info_file));
+
+
+        let table_path = self.get_path();
+        let mut perms = ok_or_service_err!(std::fs::metadata(&table_path)).permissions();
+        // Add write and execute permissions for the owner of the file
+        let mode = perms.mode();
+        let new_mode = mode | 0o300; // add write and execute permissions
+        perms.set_mode(new_mode);
+        ok_or_service_err!(std::fs::set_permissions(&table_path, perms));
+        ok_or_service_err!(std::fs::remove_file(&table_path));
+
+        ok_or_service_err!(self.delete_fks_with_table());
+        Ok(())
     }
 }
